@@ -46,7 +46,7 @@ st.session_state.portfolio_input = portfolio_input
 # ----------------------------
 
 fx = yf.Ticker("THB=X")
-fx_rate = fx.history(period="1d")["Close"].iloc[-1]
+fx_rate = round(fx.history(period="1d")["Close"].iloc[-1], 2)
 
 # ----------------------------
 # Portfolio Calculation
@@ -69,6 +69,21 @@ for ticker, shares, cost in stocks:
         continue
 
     current_price = hist["Close"].iloc[-1]
+
+    # Moving Averages for Momentum
+    hist["MA20"] = hist["Close"].rolling(20).mean()
+    hist["MA50"] = hist["Close"].rolling(50).mean()
+
+    ma20 = hist["MA20"].iloc[-1]
+    ma50 = hist["MA50"].iloc[-1]
+
+    # Classic momentum logic
+    if current_price > ma50 and ma20 > ma50:
+        momentum = "BUY"
+    elif current_price < ma50 and ma20 < ma50:
+        momentum = "SELL"
+    else:
+        momentum = "HOLD"
 
     market_value = shares * current_price
     cost_basis = shares * cost
@@ -96,6 +111,7 @@ for ticker, shares, cost in stocks:
         "Value (THB)": round(market_value_thb, 2),
         "P&L (THB)": round(pnl_thb, 2),
         "P&L (%)": round(pnl_pct, 2),
+        "Momentum": momentum,
         "Signal": signal,
         "Stop Loss": round(stop_loss, 2)
     })
@@ -103,7 +119,7 @@ for ticker, shares, cost in stocks:
 df = pd.DataFrame(portfolio_data)
 
 # ----------------------------
-# Total Portfolio Metrics
+# Portfolio Overview
 # ----------------------------
 
 st.subheader("💰 Portfolio Overview")
@@ -117,7 +133,7 @@ col1.metric("Total Value (THB)", f"{total_thb:,.2f}")
 col2.metric("Total P&L", f"{total_pnl:,.2f} THB ({total_return_pct:.2f}%)")
 
 # ----------------------------
-# Pie Chart (Apple Clean Minimal)
+# Pie Chart (Clean Minimal)
 # ----------------------------
 
 st.subheader("📊 Allocation")
@@ -133,28 +149,31 @@ if not df.empty:
         wedgeprops=dict(width=0.4)
     )
     ax.set_title("")
-
     st.pyplot(fig)
 
 # ----------------------------
-# Portfolio Table
+# Styled Table
 # ----------------------------
 
 st.subheader("📋 Portfolio Breakdown")
 
-def color_pnl(val):
+def color_columns(val):
     if isinstance(val, (int, float)):
         if val > 0:
             return "color: green"
         elif val < 0:
             return "color: red"
+    if val == "BUY":
+        return "color: green"
+    if val == "SELL":
+        return "color: red"
     return ""
 
-styled_df = df.style.applymap(color_pnl, subset=["P&L (THB)", "P&L (%)"])
+styled_df = df.style.applymap(color_columns, subset=["P&L (THB)", "P&L (%)", "Momentum"])
 st.dataframe(styled_df, use_container_width=True)
 
 # ----------------------------
-# Top Picks Scanner
+# Top Picks
 # ----------------------------
 
 st.subheader("🔥 Top Picks (Momentum Scanner)")
