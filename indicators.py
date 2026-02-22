@@ -23,3 +23,15 @@ def calculate_signal(data):
         return "🔴 SELL"
     else:
         return "🟡 HOLD"
+
+
+def calculate_stop_loss(data):
+
+    recent_low = data["Low"].rolling(20).min().iloc[-1]
+    current_price = data["Close"].iloc[-1]
+
+    percent_stop = current_price * 0.92  # 8% rule
+
+    stop_loss = max(recent_low, percent_stop)
+
+    return round(stop_loss, 2)
