@@ -2,7 +2,8 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import json
-from indicators import calculate_signal
+import matplotlib.pyplot as plt
+from indicators import calculate_signal, calculate_stop_loss
 from scanner import scan_top_picks
 
 st.set_page_config(layout="wide")
@@ -10,7 +11,7 @@ st.set_page_config(layout="wide")
 st.title("📊 Yuth's Investment")
 
 # ----------------------------
-# Load Saved Portfolio
+# Load / Save Portfolio
 # ----------------------------
 
 def load_portfolio():
@@ -37,7 +38,7 @@ portfolio_input = st.sidebar.text_area(
 
 if st.sidebar.button("💾 Save Portfolio"):
     save_portfolio(portfolio_input)
-    st.sidebar.success("Portfolio Saved to Cloud ✅")
+    st.sidebar.success("Portfolio Saved ✅")
 
 st.session_state.portfolio_input = portfolio_input
 
@@ -79,11 +80,14 @@ for ticker, shares, cost in stocks:
     total_thb += market_value_thb
 
     signal = calculate_signal(hist)
+    stop_loss = calculate_stop_loss(hist)
 
     portfolio_data.append({
         "Ticker": ticker,
-        "Value (THB)": round(market_value_thb, 2),
-        "Signal": signal
+        "Current Price": round(current_price,2),
+        "Value (THB)": round(market_value_thb,2),
+        "Signal": signal,
+        "Stop Loss": stop_loss
     })
 
 df = pd.DataFrame(portfolio_data)
@@ -96,14 +100,19 @@ st.subheader("💰 Total Portfolio Value")
 st.metric("Total (THB)", f"{total_thb:,.2f}")
 
 # ----------------------------
-# Pie Chart Allocation
+# Pie Chart Allocation (Smaller)
 # ----------------------------
 
 st.subheader("📊 Allocation (THB)")
 
 if not df.empty:
     pie_data = df.set_index("Ticker")["Value (THB)"]
-    st.pyplot(pie_data.plot.pie(autopct="%1.1f%%", figsize=(6,6)).figure)
+
+    fig, ax = plt.subplots(figsize=(4,4))  # smaller size
+    ax.pie(pie_data, labels=pie_data.index, autopct="%1.1f%%")
+    ax.set_title("Portfolio Allocation")
+
+    st.pyplot(fig)
 
 # ----------------------------
 # Portfolio Table
