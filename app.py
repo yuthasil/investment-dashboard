@@ -7,7 +7,6 @@ from indicators import calculate_signal, calculate_stop_loss
 from scanner import scan_top_picks
 
 st.set_page_config(layout="wide")
-
 st.title("📊 Yuth's Investment")
 
 # ----------------------------
@@ -57,6 +56,7 @@ stocks = [line.split(",") for line in portfolio_input.split("\n") if line]
 
 portfolio_data = []
 total_thb = 0
+total_cost_thb = 0
 
 for ticker, shares, cost in stocks:
     shares = float(shares)
@@ -69,48 +69,70 @@ for ticker, shares, cost in stocks:
         continue
 
     current_price = hist["Close"].iloc[-1]
+
     market_value = shares * current_price
+    cost_basis = shares * cost
 
     # Convert US stocks to THB
     if ".BK" not in ticker:
         market_value_thb = market_value * fx_rate
+        cost_basis_thb = cost_basis * fx_rate
     else:
         market_value_thb = market_value
+        cost_basis_thb = cost_basis
+
+    pnl_thb = market_value_thb - cost_basis_thb
+    pnl_pct = (pnl_thb / cost_basis_thb) * 100
 
     total_thb += market_value_thb
+    total_cost_thb += cost_basis_thb
 
     signal = calculate_signal(hist)
     stop_loss = calculate_stop_loss(hist)
 
     portfolio_data.append({
         "Ticker": ticker,
-        "Current Price": round(current_price,2),
-        "Value (THB)": round(market_value_thb,2),
+        "Current Price": round(current_price, 2),
+        "Value (THB)": round(market_value_thb, 2),
+        "P&L (THB)": round(pnl_thb, 2),
+        "P&L (%)": round(pnl_pct, 2),
         "Signal": signal,
-        "Stop Loss": stop_loss
+        "Stop Loss": round(stop_loss, 2)
     })
 
 df = pd.DataFrame(portfolio_data)
 
 # ----------------------------
-# Display Total Portfolio
+# Total Portfolio Metrics
 # ----------------------------
 
-st.subheader("💰 Total Portfolio Value")
-st.metric("Total (THB)", f"{total_thb:,.2f}")
+st.subheader("💰 Portfolio Overview")
+
+col1, col2 = st.columns(2)
+
+total_pnl = total_thb - total_cost_thb
+total_return_pct = (total_pnl / total_cost_thb) * 100 if total_cost_thb > 0 else 0
+
+col1.metric("Total Value (THB)", f"{total_thb:,.2f}")
+col2.metric("Total P&L", f"{total_pnl:,.2f} THB ({total_return_pct:.2f}%)")
 
 # ----------------------------
-# Pie Chart Allocation (Smaller)
+# Pie Chart (Apple Clean Minimal)
 # ----------------------------
 
-st.subheader("📊 Allocation (THB)")
+st.subheader("📊 Allocation")
 
 if not df.empty:
     pie_data = df.set_index("Ticker")["Value (THB)"]
 
-    fig, ax = plt.subplots(figsize=(4,4))  # smaller size
-    ax.pie(pie_data, labels=pie_data.index, autopct="%1.1f%%")
-    ax.set_title("Portfolio Allocation")
+    fig, ax = plt.subplots(figsize=(4, 4))
+    ax.pie(
+        pie_data,
+        labels=pie_data.index,
+        autopct=None,
+        wedgeprops=dict(width=0.4)
+    )
+    ax.set_title("")
 
     st.pyplot(fig)
 
@@ -119,12 +141,22 @@ if not df.empty:
 # ----------------------------
 
 st.subheader("📋 Portfolio Breakdown")
-st.dataframe(df)
+
+def color_pnl(val):
+    if isinstance(val, (int, float)):
+        if val > 0:
+            return "color: green"
+        elif val < 0:
+            return "color: red"
+    return ""
+
+styled_df = df.style.applymap(color_pnl, subset=["P&L (THB)", "P&L (%)"])
+st.dataframe(styled_df, use_container_width=True)
 
 # ----------------------------
-# Top Picks
+# Top Picks Scanner
 # ----------------------------
 
 st.subheader("🔥 Top Picks (Momentum Scanner)")
 top_picks = scan_top_picks()
-st.dataframe(top_picks)
+st.dataframe(top_picks, use_container_width=True)
